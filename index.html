@@ -1,0 +1,1079 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>图片转Markdown工具</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome -->
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    <!-- Tesseract.js -->
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4.1.1/dist/tesseract.min.js"></script>
+
+    <script>
+        // 确保 Tesseract.js 正确加载
+        window.TesseractConfig = {
+            corePath: 'https://cdn.jsdelivr.net/npm/tesseract.js-core@4.0.4/tesseract-core.wasm.js',
+            workerPath: 'https://cdn.jsdelivr.net/npm/tesseract.js@4.1.1/dist/worker.min.js'
+        };
+    </script>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#1e40af',
+                        secondary: '#3b82f6',
+                        accent: '#60a5fa',
+                        neutral: '#f3f4f6',
+                        'neutral-dark': '#9ca3ab'
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif']
+                    }
+                }
+            }
+        };
+    </script>
+
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .glass-effect {
+                background: rgba(255, 255, 255, 0.1);
+                backdrop-filter: blur(10px);
+                -webkit-backdrop-filter: blur(10px);
+                border: 1px solid rgba(255, 255, 255, 0.2);
+            }
+            .gradient-bg {
+                background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%);
+            }
+            .text-shadow {
+                text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            }
+            .transition-all-300 {
+                transition: all 300ms ease-in-out;
+            }
+        }
+
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #f1f5f9; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #64748b; }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fadeIn { animation: fadeIn 0.5s ease-out; }
+
+        .drag-area.active {
+            border-color: #3b82f6;
+            background-color: rgba(59, 130, 246, 0.1);
+        }
+
+        .loader {
+            border: 3px solid #f3f4f6;
+            border-top: 3px solid #3b82f6;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .markdown-body code {
+            background: #f1f5f9;
+            padding: 0.2em 0.4em;
+            border-radius: 3px;
+            font-size: 0.9em;
+        }
+        .markdown-body pre code {
+            background: transparent;
+            padding: 0;
+        }
+        .markdown-body table {
+            border-collapse: collapse;
+            width: 100%;
+            margin: 0.5em 0;
+            font-size: 0.9em;
+        }
+        .markdown-body table th,
+        .markdown-body table td {
+            border: 1px solid #d1d5db;
+            padding: 6px 10px;
+            text-align: left;
+        }
+        .markdown-body table th {
+            background: #f3f4f6;
+            font-weight: 600;
+        }
+        .markdown-body blockquote {
+            border-left: 4px solid #d1d5db;
+            padding-left: 1em;
+            margin: 0.5em 0;
+            color: #6b7280;
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-blue-50 to-indigo-100 min-h-screen font-sans text-gray-800">
+    <div class="container mx-auto px-4 py-8 max-w-6xl">
+        <!-- 头部 -->
+        <header class="text-center mb-8 animate-fadeIn">
+            <h1 class="text-4xl font-bold text-primary mb-2 text-shadow">图片转 Markdown 工具</h1>
+            <p class="text-lg text-gray-600">快速将图片中的文字内容提取并转换为结构化 Markdown 格式</p>
+        </header>
+
+        <!-- 主要内容 -->
+        <main class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <!-- 左侧：上传区域 -->
+            <div class="bg-white rounded-xl shadow-lg p-6 hover:shadow-xl transition-all-300">
+                <h2 class="text-2xl font-semibold text-primary mb-4 flex items-center">
+                    <i class="fa fa-cloud-upload mr-2"></i>图片上传
+                </h2>
+
+                <!-- 拖拽上传 -->
+                <div id="drag-area"
+                     class="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center cursor-pointer hover:border-secondary transition-all-300 mb-6 relative bg-gradient-to-br from-blue-50 to-white">
+                    <div class="upload-icon mb-4">
+                        <i class="fa fa-cloud-upload text-5xl text-secondary opacity-75"></i>
+                    </div>
+                    <h3 class="text-lg font-medium mb-2">拖拽图片到此处或点击选择文件</h3>
+                    <p class="text-sm text-gray-500 mb-4">支持 JPG、PNG、WebP 格式，最大 10MB</p>
+                    <input type="file" id="file-input" class="hidden" accept="image/jpeg,image/png,image/webp" />
+                    <button id="select-btn"
+                            class="bg-primary hover:bg-blue-700 text-white font-medium py-2 px-6 rounded-lg transition-all-300 shadow hover:shadow-md transform hover:scale-105 active:scale-95">
+                        选择图片
+                    </button>
+                </div>
+
+                <!-- 图片预览 -->
+                <div id="preview-container" class="hidden">
+                    <h3 class="text-lg font-medium mb-3 flex items-center">
+                        <i class="fa fa-image mr-2 text-secondary"></i>图片预览
+                    </h3>
+                    <div class="relative mb-4 bg-gray-50 rounded-lg p-4 border border-gray-200">
+                        <div class="flex justify-center items-center min-h-[200px]">
+                            <img id="preview-img" class="w-full h-auto rounded-lg max-h-64 object-contain" alt="预览图片" />
+                        </div>
+                        <button id="remove-img"
+                                class="absolute top-2 right-2 bg-red-500 text-white rounded-full w-8 h-8 flex items-center justify-center hover:bg-red-600 transition-all-300 shadow-md">
+                            <i class="fa fa-times"></i>
+                        </button>
+                    </div>
+
+                    <div id="image-info" class="text-sm text-gray-600 mb-4 p-3 bg-blue-50 rounded-lg">
+                        <div class="flex justify-between"><span>文件名：</span><span id="file-name" class="font-medium truncate max-w-[200px]">-</span></div>
+                        <div class="flex justify-between mt-1"><span>文件大小：</span><span id="file-size">-</span></div>
+                        <div class="flex justify-between mt-1"><span>图片尺寸：</span><span id="image-dimensions">-</span></div>
+                    </div>
+
+                    <div class="flex space-x-4">
+                        <button id="process-btn"
+                                class="bg-secondary hover:bg-blue-600 text-white font-medium py-2 px-6 rounded-lg transition-all-300 shadow hover:shadow-md flex-1 flex items-center justify-center transform hover:scale-105 active:scale-95">
+                            <i class="fa fa-magic mr-2"></i>开始转换
+                        </button>
+                        <button id="clear-btn"
+                                class="bg-gray-200 hover:bg-gray-300 text-gray-700 font-medium py-2 px-6 rounded-lg transition-all-300 transform hover:scale-105 active:scale-95">
+                            清除
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 处理中 -->
+                <div id="processing-container" class="hidden text-center py-8">
+                    <div class="loader mx-auto mb-4"></div>
+                    <h3 class="text-lg font-medium text-primary mb-2">正在处理中...</h3>
+                    <p id="processing-status" class="text-gray-600 mb-4">准备中...</p>
+                    <div class="mt-4 bg-gray-200 rounded-full h-2.5">
+                        <div id="progress-bar" class="bg-secondary h-2.5 rounded-full transition-all duration-200" style="width: 0%"></div>
+                    </div>
+                    <p id="progress-text" class="text-sm text-gray-500 mt-2">0%</p>
+                    <button id="cancel-ocr-btn"
+                            class="mt-4 text-sm text-red-500 hover:text-red-700 underline hidden">
+                        取消处理
+                    </button>
+                </div>
+            </div>
+
+            <!-- 右侧：结果展示 -->
+            <div class="bg-white rounded-xl shadow-lg p-6 hover:shadow-xl transition-all-300">
+                <h2 class="text-2xl font-semibold text-primary mb-4 flex items-center justify-between">
+                    <span><i class="fa fa-code mr-2"></i>Markdown 结果</span>
+                    <div id="result-actions" class="hidden flex gap-2">
+                        <button id="copy-btn"
+                                class="bg-accent hover:bg-blue-500 text-white font-medium py-1 px-4 rounded-lg transition-all-300 text-sm flex items-center">
+                            <i class="fa fa-copy mr-1"></i>复制
+                        </button>
+                    </div>
+                </h2>
+
+                <!-- 初始占位 -->
+                <div id="result-initial" class="text-center py-16">
+                    <div class="text-gray-300 mb-4">
+                        <i class="fa fa-file-text-o text-7xl"></i>
+                    </div>
+                    <h3 class="text-lg font-medium text-gray-500 mb-2">上传图片开始转换</h3>
+                    <p class="text-sm text-gray-400">转换后的 Markdown 内容将显示在这里</p>
+                </div>
+
+                <!-- 结果内容 -->
+                <div id="result-content" class="hidden">
+                    <div class="bg-gray-50 rounded-lg p-4 mb-4 border border-gray-200">
+                        <pre id="markdown-output"
+                             class="markdown-body text-sm text-gray-800 whitespace-pre-wrap break-words max-h-96 overflow-y-auto font-mono"></pre>
+                    </div>
+
+                    <!-- 格式工具栏 -->
+                    <div id="format-toolbar" class="bg-gray-50 rounded-lg p-3 mb-4 border border-gray-200">
+                        <h4 class="text-sm font-medium text-gray-700 mb-2">格式调整：</h4>
+                        <div class="flex flex-wrap gap-2">
+                            <button class="format-btn bg-white hover:bg-gray-100 text-gray-700 border border-gray-300 rounded px-2 py-1 text-xs flex items-center" data-format="heading">
+                                <i class="fa fa-header mr-1"></i>标题
+                            </button>
+                            <button class="format-btn bg-white hover:bg-gray-100 text-gray-700 border border-gray-300 rounded px-2 py-1 text-xs flex items-center" data-format="bold">
+                                <i class="fa fa-bold mr-1"></i>粗体
+                            </button>
+                            <button class="format-btn bg-white hover:bg-gray-100 text-gray-700 border border-gray-300 rounded px-2 py-1 text-xs flex items-center" data-format="italic">
+                                <i class="fa fa-italic mr-1"></i>斜体
+                            </button>
+                            <button class="format-btn bg-white hover:bg-gray-100 text-gray-700 border border-gray-300 rounded px-2 py-1 text-xs flex items-center" data-format="list">
+                                <i class="fa fa-list-ul mr-1"></i>列表
+                            </button>
+                            <button class="format-btn bg-white hover:bg-gray-100 text-gray-700 border border-gray-300 rounded px-2 py-1 text-xs flex items-center" data-format="table">
+                                <i class="fa fa-table mr-1"></i>表格
+                            </button>
+                            <button class="format-btn bg-white hover:bg-gray-100 text-gray-700 border border-gray-300 rounded px-2 py-1 text-xs flex items-center" data-format="code">
+                                <i class="fa fa-code mr-1"></i>代码
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="flex space-x-4">
+                        <button id="download-btn"
+                                class="bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-6 rounded-lg transition-all-300 shadow hover:shadow-md flex-1 flex items-center justify-center">
+                            <i class="fa fa-download mr-2"></i>下载 .md 文件
+                        </button>
+                        <button id="new-process-btn"
+                                class="bg-secondary hover:bg-blue-600 text-white font-medium py-2 px-6 rounded-lg transition-all-300 shadow hover:shadow-md">
+                            新任务
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 错误状态 -->
+                <div id="error-container" class="hidden text-center py-8">
+                    <div class="bg-red-50 text-red-500 p-4 rounded-lg mb-4">
+                        <i class="fa fa-exclamation-circle text-2xl mb-2"></i>
+                        <h3 id="error-title" class="text-lg font-medium mb-1">处理失败</h3>
+                        <p id="error-message" class="text-sm">无法识别图片中的文字内容，请重试</p>
+                    </div>
+                    <button id="retry-btn"
+                            class="bg-secondary hover:bg-blue-600 text-white font-medium py-2 px-6 rounded-lg transition-all-300 shadow hover:shadow-md">
+                        重试
+                    </button>
+                </div>
+            </div>
+        </main>
+
+        <!-- 使用示例 -->
+        <section class="mt-12">
+            <h2 class="text-2xl font-bold text-primary mb-6 text-center">使用示例</h2>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div class="bg-white rounded-xl shadow-lg overflow-hidden hover:shadow-xl transition-all-300">
+                    <div class="h-48 bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-white">
+                        <i class="fa fa-file-text-o text-6xl opacity-60"></i>
+                        <h3 class="text-white font-medium text-xl ml-4">文档截图</h3>
+                    </div>
+                    <div class="p-4">
+                        <p class="text-sm text-gray-600">支持识别文档中的标题、段落、列表等结构，自动转换为 Markdown 格式。</p>
+                    </div>
+                </div>
+                <div class="bg-white rounded-xl shadow-lg overflow-hidden hover:shadow-xl transition-all-300">
+                    <div class="h-48 bg-gradient-to-br from-green-400 to-green-600 flex items-center justify-center text-white">
+                        <i class="fa fa-code text-6xl opacity-60"></i>
+                        <h3 class="text-white font-medium text-xl ml-4">代码截图</h3>
+                    </div>
+                    <div class="p-4">
+                        <p class="text-sm text-gray-600">智能识别代码结构，保留缩进，自动包裹为 Markdown 代码块。</p>
+                    </div>
+                </div>
+                <div class="bg-white rounded-xl shadow-lg overflow-hidden hover:shadow-xl transition-all-300">
+                    <div class="h-48 bg-gradient-to-br from-purple-400 to-purple-600 flex items-center justify-center text-white">
+                        <i class="fa fa-table text-6xl opacity-60"></i>
+                        <h3 class="text-white font-medium text-xl ml-4">表格截图</h3>
+                    </div>
+                    <div class="p-4">
+                        <p class="text-sm text-gray-600">自动识别表格结构，转换为 Markdown 表格格式，保留行列对齐。</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <!-- 页脚 -->
+    <footer class="bg-gray-50 border-t border-gray-200 mt-12 py-6">
+        <div class="container mx-auto px-4 text-center text-gray-600 text-sm">
+            <p>图片转 Markdown 工具 | 高效提取图片文字内容</p>
+            <p class="mt-2">支持 JPG、PNG、WebP 格式 | 最大 10MB | OCR 引擎：Tesseract.js</p>
+        </div>
+    </footer>
+
+    <!-- Toast -->
+    <div id="success-toast"
+         class="fixed bottom-4 right-4 px-6 py-3 rounded-lg shadow-lg transform translate-y-20 opacity-0 transition-all duration-300 flex items-center z-50 bg-green-500 text-white">
+        <i class="fa fa-check-circle mr-2"></i>
+        <span id="toast-message">操作成功</span>
+    </div>
+
+    <script>
+    /* ===== 全局状态 ===== */
+    let currentImage = null;        // 当前图片 File 对象
+    let currentImageUrl = null;     // 当前图片的 ObjectURL（用于 OCR）
+    let recognitionResult = null;   // OCR 原始文本
+    let ocrCancelFlag = false;      // 取消 OCR 标志
+    let ocrProgressInterval = null; // 进度模拟定时器
+    let initialized = false;        // 确保 init 只执行一次
+
+    /* ===== DOM 引用 ===== */
+    const $ = id => document.getElementById(id);
+    const dragArea = $('drag-area');
+    const fileInput = $('file-input');
+    const selectBtn = $('select-btn');
+    const previewContainer = $('preview-container');
+    const previewImg = $('preview-img');
+    const removeImgBtn = $('remove-img');
+    const processBtn = $('process-btn');
+    const clearBtn = $('clear-btn');
+    const processingContainer = $('processing-container');
+    const processingStatus = $('processing-status');
+    const progressBar = $('progress-bar');
+    const progressText = $('progress-text');
+    const cancelOcrBtn = $('cancel-ocr-btn');
+    const fileName = $('file-name');
+    const fileSize = $('file-size');
+    const imageDimensions = $('image-dimensions');
+    const resultInitial = $('result-initial');
+    const resultContent = $('result-content');
+    const resultActions = $('result-actions');
+    const markdownOutput = $('markdown-output');
+    const copyBtn = $('copy-btn');
+    const downloadBtn = $('download-btn');
+    const newProcessBtn = $('new-process-btn');
+    const errorContainer = $('error-container');
+    const errorTitle = $('error-title');
+    const errorMessage = $('error-message');
+    const retryBtn = $('retry-btn');
+    const successToast = $('success-toast');
+    const toastMessage = $('toast-message');
+    const formatButtons = document.querySelectorAll('.format-btn');
+
+    /* ===== 初始化（仅一次） ===== */
+    function init() {
+        if (initialized) return;
+        initialized = true;
+        console.log('[init] 初始化应用...');
+
+        // DOM 检查
+        if (!selectBtn || !fileInput || !dragArea) {
+            console.error('[init] 关键 DOM 元素缺失');
+            return;
+        }
+
+        // 选择按钮 → 触发文件选择
+        selectBtn.addEventListener('click', e => {
+            e.preventDefault();
+            fileInput.click();
+        });
+
+        // 文件选择变化
+        fileInput.addEventListener('change', e => {
+            const files = e.target.files;
+            if (files && files.length > 0) {
+                fileInput.value = ''; // 允许重复选择同一文件
+                processFile(files[0]);
+            }
+        });
+
+        // 拖拽
+        dragArea.addEventListener('dragover', e => { e.preventDefault(); dragArea.classList.add('active'); });
+        dragArea.addEventListener('dragleave', e => { e.preventDefault(); dragArea.classList.remove('active'); });
+        dragArea.addEventListener('drop', e => {
+            e.preventDefault();
+            dragArea.classList.remove('active');
+            const file = e.dataTransfer.files[0];
+            if (file && file.type.startsWith('image/')) {
+                processFile(file);
+            } else {
+                showToast('请上传有效的图片文件', 'error');
+            }
+        });
+
+        // 点击拖拽区（仅点击内容区触发，不干扰内部按钮）
+        dragArea.addEventListener('click', e => {
+            if (e.target === dragArea || e.target.closest('.upload-icon') || e.target.matches('h3, p')) {
+                fileInput.click();
+            }
+        });
+
+        // 其他按钮
+        removeImgBtn.addEventListener('click', removeImage);
+        processBtn.addEventListener('click', startProcessing);
+        clearBtn.addEventListener('click', clearAll);
+        copyBtn.addEventListener('click', copyToClipboard);
+        downloadBtn.addEventListener('click', downloadMarkdown);
+        newProcessBtn.addEventListener('click', startNewProcess);
+        retryBtn.addEventListener('click', startProcessing);
+
+        // 取消 OCR
+        cancelOcrBtn.addEventListener('click', () => {
+            ocrCancelFlag = true;
+            showToast('已取消处理');
+        });
+
+        // 格式按钮
+        formatButtons.forEach(btn => {
+            btn.addEventListener('click', () => applyFormat(btn.dataset.format));
+        });
+
+        // 恢复上次结果
+        restoreFromLocalStorage();
+
+        console.log('[init] 初始化完成');
+    }
+
+    /* ===== 文件处理 ===== */
+    function processFile(file) {
+        console.log('[processFile]', file.name, (file.size / 1024).toFixed(1) + 'KB');
+
+        // 验证大小
+        if (file.size > 10 * 1024 * 1024) {
+            showToast('图片大小不能超过 10MB', 'error');
+            return;
+        }
+        // 验证类型
+        const validTypes = ['image/jpeg', 'image/png', 'image/webp'];
+        if (!validTypes.includes(file.type)) {
+            showToast('仅支持 JPG、PNG、WebP 格式', 'error');
+            return;
+        }
+
+        currentImage = file;
+        if (currentImageUrl) {
+            URL.revokeObjectURL(currentImageUrl);
+        }
+        currentImageUrl = URL.createObjectURL(file);
+
+        // 显示信息
+        fileName.textContent = file.name;
+        fileSize.textContent = formatFileSize(file.size);
+
+        // 加载图片获取尺寸
+        const img = new Image();
+        img.onload = () => {
+            imageDimensions.textContent = img.width + ' × ' + img.height;
+            // 大图自动压缩
+            if (img.width > 2560 || img.height > 2560 || file.size > 2 * 1024 * 1024) {
+                compressImage(file, img, compressedFile => {
+                    // 释放原 URL，换成压缩后的
+                    URL.revokeObjectURL(currentImageUrl);
+                    currentImage = compressedFile;
+                    currentImageUrl = URL.createObjectURL(compressedFile);
+                    showPreview(currentImageUrl);
+                });
+            } else {
+                showPreview(currentImageUrl);
+            }
+        };
+        img.onerror = () => { showToast('图片加载失败，请检查文件', 'error'); };
+        img.src = currentImageUrl;
+    }
+
+    function showPreview(url) {
+        previewImg.onerror = function () {
+            // 仅尝试一次 fallback，防止循环
+            previewImg.onerror = null;
+            const reader = new FileReader();
+            reader.onload = e => { previewImg.src = e.target.result; };
+            reader.readAsDataURL(currentImage);
+        };
+        previewImg.src = url;
+        previewContainer.classList.remove('hidden');
+        dragArea.classList.add('hidden');
+        resetResultArea();
+    }
+
+    /* ===== 图片压缩 ===== */
+    function compressImage(file, img, callback) {
+        let width = img.width, height = img.height;
+        const maxDim = 2560;
+        if (width > height && width > maxDim) { height = Math.round(height * maxDim / width); width = maxDim; }
+        else if (height > maxDim) { width = Math.round(width * maxDim / height); height = maxDim; }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+
+        let quality = 0.92;
+        if (file.size > 8 * 1024 * 1024) quality = 0.85;
+        else if (file.size > 5 * 1024 * 1024) quality = 0.88;
+
+        canvas.toBlob(blob => {
+            const compressed = new File([blob], file.name, { type: file.type, lastModified: Date.now() });
+            callback(compressed);
+        }, file.type, quality);
+    }
+
+    /* ===== 图像预处理（给 OCR 用） ===== */
+    function preprocessForOcr(canvas, ctx, w, h) {
+        const imageData = ctx.getImageData(0, 0, w, h);
+        const d = imageData.data;
+
+        // 1. 灰度
+        for (let i = 0; i < d.length; i += 4) {
+            const gray = d[i] * 0.299 + d[i + 1] * 0.587 + d[i + 2] * 0.114;
+            d[i] = d[i + 1] = d[i + 2] = gray;
+        }
+
+        // 2. 对比度 + 亮度
+        const contrast = 1.4;
+        const brightness = 8;
+        for (let i = 0; i < d.length; i += 4) {
+            d[i] = clamp((d[i] - 128) * contrast + 128 + brightness);
+            d[i + 1] = d[i + 2] = d[i];
+        }
+
+        // 3. 自适应二值化（Otsu 近似：取中值附近）
+        const samples = [];
+        for (let i = 0; i < d.length; i += 40) samples.push(d[i]);
+        samples.sort((a, b) => a - b);
+        const median = samples[Math.floor(samples.length / 2)] || 128;
+        const threshold = Math.min(180, Math.max(140, median));
+
+        for (let i = 0; i < d.length; i += 4) {
+            const v = d[i] > threshold ? 255 : 0;
+            d[i] = d[i + 1] = d[i + 2] = v;
+        }
+
+        ctx.putImageData(imageData, 0, 0);
+
+        // 4. 锐化（卷积）
+        sharpenCanvas(ctx, w, h);
+    }
+
+    function sharpenCanvas(ctx, w, h) {
+        const src = ctx.getImageData(0, 0, w, h);
+        const dst = ctx.createImageData(w, h);
+        const kernel = [0, -1, 0, -1, 5, -1, 0, -1, 0];
+
+        for (let y = 1; y < h - 1; y++) {
+            for (let x = 1; x < w - 1; x++) {
+                const idx = (y * w + x) * 4;
+                let r = 0, g = 0, b = 0;
+                for (let ky = -1; ky <= 1; ky++) {
+                    for (let kx = -1; kx <= 1; kx++) {
+                        const k = kernel[(ky + 1) * 3 + (kx + 1)];
+                        const pIdx = ((y + ky) * w + (x + kx)) * 4;
+                        r += src.data[pIdx] * k;
+                        g += src.data[pIdx + 1] * k;
+                        b += src.data[pIdx + 2] * k;
+                    }
+                }
+                dst.data[idx] = clamp(r);
+                dst.data[idx + 1] = clamp(g);
+                dst.data[idx + 2] = clamp(b);
+                dst.data[idx + 3] = 255;
+            }
+        }
+        ctx.putImageData(dst, 0, 0);
+    }
+
+    function clamp(v) { return Math.min(255, Math.max(0, Math.round(v))); }
+
+    /* ===== 移除图片 ===== */
+    function removeImage() {
+        currentImage = null;
+        if (currentImageUrl) { URL.revokeObjectURL(currentImageUrl); currentImageUrl = null; }
+        previewImg.src = '';
+        previewContainer.classList.add('hidden');
+        dragArea.classList.remove('hidden');
+        resetResultArea();
+        stopOcrProgress();
+    }
+
+    /* ===== OCR 处理 ===== */
+    function startProcessing() {
+        if (!currentImage) return;
+        console.log('[OCR] 开始处理');
+
+        // 显示处理状态
+        previewContainer.classList.add('hidden');
+        processingContainer.classList.remove('hidden');
+        cancelOcrBtn.classList.remove('hidden');
+        resetResultArea();
+
+        ocrCancelFlag = false;
+        let progress = 0;
+
+        // 进度模拟（真实进度会覆盖）
+        stopOcrProgress();
+        ocrProgressInterval = setInterval(() => {
+            if (ocrCancelFlag) return;
+            progress += Math.random() * 8;
+            if (progress > 80) progress = 80;
+            updateProgressBar(progress, '正在处理...');
+        }, 400);
+
+        // 加载图片到 Canvas 并预处理
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        const img = new Image();
+
+        img.onload = function () {
+            if (ocrCancelFlag) { cleanupOcr(); return; }
+            canvas.width = img.width;
+            canvas.height = img.height;
+            ctx.drawImage(img, 0, 0);
+            updateProgressBar(10, '正在预处理图片...');
+
+            // 预处理
+            preprocessForOcr(canvas, ctx, canvas.width, canvas.height);
+            updateProgressBar(20, '预处理完成，开始 OCR 识别...');
+
+            // OCR 配置
+            const tessConfig = {
+                logger: info => {
+                    if (ocrCancelFlag) return;
+                    if (info.status === 'recognizing text') {
+                        const pct = 20 + Math.round(info.progress * 70);
+                        updateProgressBar(pct, '正在识别文字...');
+                    } else if (info.status === 'loading tesseract core') {
+                        updateProgressBar(22, '正在加载 OCR 引擎...');
+                    } else if (info.status === 'initializing api') {
+                        updateProgressBar(25, '正在初始化 API...');
+                    } else if (info.status === 'loading language traineddata') {
+                        updateProgressBar(28, '正在加载语言包...');
+                    }
+                },
+                tessedit_ocr_engine_mode: 3,
+                tessedit_pageseg_mode: 6,  // 假设为统一的文本块
+                preserve_interword_spaces: 1,
+                classify_bln_numeric_mode: 1
+            };
+
+            console.log('[OCR] 开始 Tesseract.recognize');
+            Tesseract.recognize(canvas, 'chi_sim+eng', tessConfig)
+                .then(result => {
+                    if (ocrCancelFlag) { cleanupOcr(); return; }
+                    const text = result.data.text;
+                    console.log('[OCR] 完成，文本长度:', text.length);
+                    stopOcrProgress();
+                    updateProgressBar(100, '处理完成！');
+                    setTimeout(() => {
+                        processingContainer.classList.add('hidden');
+                        cancelOcrBtn.classList.add('hidden');
+                        processOcrResult(text);
+                    }, 400);
+                })
+                .catch(err => {
+                    if (ocrCancelFlag) { cleanupOcr(); return; }
+                    console.error('[OCR] 失败:', err);
+                    stopOcrProgress();
+                    processingContainer.classList.add('hidden');
+                    cancelOcrBtn.classList.add('hidden');
+                    showError('OCR 识别失败', err.message || '请检查图片质量后重试');
+                });
+        };
+
+        img.onerror = function () {
+            stopOcrProgress();
+            processingContainer.classList.add('hidden');
+            cancelOcrBtn.classList.add('hidden');
+            showError('处理失败', '无法加载图片，请重试');
+        };
+
+        // 用 ObjectURL，而不是 File 对象
+        img.src = currentImageUrl;
+    }
+
+    function cleanupOcr() {
+        stopOcrProgress();
+        processingContainer.classList.add('hidden');
+        cancelOcrBtn.classList.add('hidden');
+        previewContainer.classList.remove('hidden');
+        showToast('已取消');
+    }
+
+    function updateProgressBar(pct, statusText) {
+        const clamped = Math.min(100, Math.max(0, pct));
+        progressBar.style.width = clamped + '%';
+        progressText.textContent = Math.round(clamped) + '%';
+        if (statusText) processingStatus.textContent = statusText;
+    }
+
+    function stopOcrProgress() {
+        if (ocrProgressInterval) {
+            clearInterval(ocrProgressInterval);
+            ocrProgressInterval = null;
+        }
+    }
+
+    /* ===== OCR 结果 → Markdown ===== */
+    function processOcrResult(text) {
+        recognitionResult = text;
+        const markdown = convertToMarkdown(text);
+        markdownOutput.textContent = markdown;
+        resultInitial.classList.add('hidden');
+        resultContent.classList.remove('hidden');
+        resultActions.classList.remove('hidden');
+        saveToLocalStorage(markdown);
+        showToast('转换完成');
+    }
+
+    /* ===== Markdown 转换 ===== */
+    function convertToMarkdown(text) {
+        let md = text;
+
+        // 清理多余空行
+        md = md.replace(/\n{3,}/g, '\n\n');
+
+        const lines = md.split('\n');
+
+        // 检测表格：如果有至少 2 行包含 | 且有一定规律
+        const tableInfo = detectTable(lines);
+        if (tableInfo.isTable) {
+            return convertTableToMarkdown(lines, tableInfo);
+        }
+
+        // 处理标题
+        md = processHeadings(md);
+        // 处理列表
+        md = processLists(md);
+        // 处理粗体/斜体
+        md = processBoldAndItalic(md);
+        // 处理代码块
+        md = processCodeBlocks(md);
+        // 清理多余空行
+        md = md.replace(/\n{3,}/g, '\n\n');
+
+        return md.trim();
+    }
+
+    /* ---- 表格检测 ---- */
+    function detectTable(lines) {
+        let pipeCounts = [];
+        let pipeLines = [];
+
+        for (let i = 0; i < lines.length; i++) {
+            const line = lines[i].trim();
+            if (!line) continue;
+            const pipes = (line.match(/[|│]/g) || []).length;
+            if (pipes >= 2) {
+                pipeCounts.push(pipes);
+                pipeLines.push(i);
+            }
+        }
+
+        // 需要至少 2 行有 pipe 才认为是表格
+        if (pipeLines.length < 2) return { isTable: false };
+
+        // 检查 pipe 数量是否相近（方差小）
+        const avg = pipeCounts.reduce((s, v) => s + v, 0) / pipeCounts.length;
+        const variance = pipeCounts.reduce((s, v) => s + (v - avg) ** 2, 0) / pipeCounts.length;
+
+        if (variance > 2) return { isTable: false };
+
+        return {
+            isTable: true,
+            startLine: pipeLines[0],
+            endLine: pipeLines[pipeLines.length - 1],
+            columnCount: Math.round(avg)
+        };
+    }
+
+    /* ---- 表格转换 ---- */
+    function convertTableToMarkdown(lines, info) {
+        const slice = lines.slice(info.startLine, info.endLine + 1);
+        let result = [];
+
+        // 第一行作为表头
+        const headerRow = slice[0].replace(/[│]/g, '|').trim();
+        // 去掉首尾可能已有的 |
+        const header = headerRow.replace(/^\|/, '').replace(/\|$/, '').trim();
+        const headerCells = header.split('|').map(c => c.trim());
+        result.push('| ' + headerCells.join(' | ') + ' |');
+
+        // 分隔行
+        result.push('| ' + headerCells.map(() => '---').join(' | ') + ' |');
+
+        // 数据行
+        for (let i = 1; i < slice.length; i++) {
+            const row = slice[i].replace(/[│]/g, '|').trim();
+            const data = row.replace(/^\|/, '').replace(/\|$/, '').trim();
+            if (!data || /^[-—=| ]+$/.test(data)) continue; // 跳过纯分隔行
+            const cells = data.split('|').map(c => c.trim());
+            result.push('| ' + cells.join(' | ') + ' |');
+        }
+
+        // 拼回原始上下文
+        let output = '';
+        if (info.startLine > 0) output += lines.slice(0, info.startLine).join('\n') + '\n\n';
+        output += result.join('\n');
+        if (info.endLine < lines.length - 1) output += '\n\n' + lines.slice(info.endLine + 1).join('\n');
+        return output;
+    }
+
+    /* ---- 标题 ---- */
+    function processHeadings(text) {
+        return text.replace(/^(#{1,6})\s+(.+)$/gm, (match, hashes, content) => {
+            const level = Math.min(hashes.length, 6);
+            return '#'.repeat(level) + ' ' + content;
+        });
+    }
+
+    /* ---- 列表 ---- */
+    function processLists(text) {
+        let r = text;
+        // 有序列表：保留
+        r = r.replace(/^(\d+)\.\s+(.*)$/gm, '$1. $2');
+        // 无序列表：统一为 -
+        r = r.replace(/^[•·\-*]\s+(.*)$/gm, '- $1');
+        return r;
+    }
+
+    /* ---- 粗体/斜体 ---- */
+    function processBoldAndItalic(text) {
+        let r = text;
+        // 粗体：__text__ → **text**
+        r = r.replace(/__([^_]+)__/g, '**$1**');
+        // 斜体：_text_ → *text*（仅当单词内无空格）
+        r = r.replace(/_([^\s_]{1,30})_/g, '*$1*');
+        return r;
+    }
+
+    /* ---- 代码块 ---- */
+    function processCodeBlocks(text) {
+        const lines = text.split('\n');
+        const result = [];
+        let i = 0;
+        while (i < lines.length) {
+            const line = lines[i];
+            // 检测代码行：含较多特殊符号、缩进明显
+            if (isCodeLine(line)) {
+                const block = [line];
+                let j = i + 1;
+                while (j < lines.length && isCodeLine(lines[j])) {
+                    block.push(lines[j]);
+                    j++;
+                }
+                if (block.length >= 3) {
+                    result.push('```');
+                    result.push(...block);
+                    result.push('```');
+                } else {
+                    result.push(...block);
+                }
+                i = j;
+            } else {
+                result.push(line);
+                i++;
+            }
+        }
+        return result.join('\n');
+    }
+
+    function isCodeLine(line) {
+        const trimmed = line.trim();
+        if (!trimmed || /^#{1,6}\s/.test(trimmed) || /^[-*•·]\s/.test(trimmed) || /^\d+\.\s/.test(trimmed)) return false;
+        const symCount = (trimmed.match(/[{}()\[\];:,<>+=/\-*&|!~^%]/g) || []).length;
+        return symCount >= 2 && trimmed.length > 3;
+    }
+
+    /* ===== 格式工具栏 ===== */
+    function applyFormat(format) {
+        const text = markdownOutput.textContent;
+        if (!text) return;
+
+        let result = text;
+        switch (format) {
+            case 'heading': {
+                // 选中行（暂不支持选区），对所有文本行添加 #
+                const lines = result.split('\n');
+                result = lines.map(l => {
+                    if (l.trim() && !/^#/.test(l) && !/^```/.test(l)) return '## ' + l;
+                    return l;
+                }).join('\n');
+                showToast('已添加标题格式（双击可调级别）');
+                break;
+            }
+            case 'bold': {
+                // 选中行加粗
+                const lines = result.split('\n');
+                result = lines.map(l => {
+                    if (l.trim() && !/^#/.test(l) && !/^```/.test(l) && !/^\|/.test(l)) return '**' + l + '**';
+                    return l;
+                }).join('\n');
+                showToast('已添加粗体格式');
+                break;
+            }
+            case 'italic': {
+                const lines = result.split('\n');
+                result = lines.map(l => {
+                    if (l.trim() && !/^#/.test(l) && !/^```/.test(l) && !/^\|/.test(l)) return '*' + l + '*';
+                    return l;
+                }).join('\n');
+                showToast('已添加斜体格式');
+                break;
+            }
+            case 'list': {
+                const lines = result.split('\n');
+                result = lines.map(l => {
+                    if (l.trim() && !/^#/.test(l) && !/^```/.test(l) && !/^[\-*]\s/.test(l) && !/^\d+\.\s/.test(l) && !/^\|/.test(l)) return '- ' + l;
+                    return l;
+                }).join('\n');
+                showToast('已转换为列表格式');
+                break;
+            }
+            case 'table':
+                showToast('提示：用 | 分隔列，用 --- 分隔表头，如：| 列1 | 列2 |');
+                return;
+            case 'code': {
+                if (!/^```/.test(result)) {
+                    result = '```\n' + result + '\n```';
+                }
+                showToast('已包装为代码块');
+                break;
+            }
+        }
+        markdownOutput.textContent = result;
+        saveToLocalStorage(result);
+    }
+
+    /* ===== 复制 ===== */
+    function copyToClipboard() {
+        const text = markdownOutput.textContent;
+        if (!text) return;
+        if (navigator.clipboard && window.isSecureContext) {
+            navigator.clipboard.writeText(text).then(() => showToast('已复制到剪贴板'))
+                .catch(() => fallbackCopy(text));
+        } else {
+            fallbackCopy(text);
+        }
+    }
+
+    function fallbackCopy(text) {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0';
+        document.body.appendChild(ta);
+        ta.select();
+        try {
+            document.execCommand('copy') ? showToast('已复制到剪贴板') : showToast('复制失败，请手动复制', 'error');
+        } catch (_) {
+            showToast('复制失败，请手动复制', 'error');
+        }
+        document.body.removeChild(ta);
+    }
+
+    /* ===== 下载 ===== */
+    function downloadMarkdown() {
+        const text = markdownOutput.textContent;
+        if (!text) return;
+        const blob = new Blob([text], { type: 'text/markdown' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'image-to-markdown.md';
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 150);
+        showToast('.md 文件已下载');
+    }
+
+    /* ===== 新任务 / 清除 ===== */
+    function startNewProcess() { clearAll(); showToast('准备新任务'); }
+
+    function clearAll() {
+        currentImage = null;
+        if (currentImageUrl) { URL.revokeObjectURL(currentImageUrl); currentImageUrl = null; }
+        recognitionResult = null;
+        previewImg.src = '';
+        previewContainer.classList.add('hidden');
+        dragArea.classList.remove('hidden');
+        processingContainer.classList.add('hidden');
+        cancelOcrBtn.classList.add('hidden');
+        resetResultArea();
+        fileInput.value = '';
+        localStorage.removeItem('img2md_result');
+        stopOcrProgress();
+    }
+
+    function resetResultArea() {
+        resultInitial.classList.remove('hidden');
+        resultContent.classList.add('hidden');
+        resultActions.classList.add('hidden');
+        errorContainer.classList.add('hidden');
+        markdownOutput.textContent = '';
+    }
+
+    /* ===== 错误 & Toast ===== */
+    function showError(title, msg) {
+        errorTitle.textContent = title;
+        errorMessage.textContent = msg;
+        errorContainer.classList.remove('hidden');
+        resultInitial.classList.add('hidden');
+        resultContent.classList.add('hidden');
+    }
+
+    function showToast(msg, type) {
+        toastMessage.textContent = msg;
+        successToast.className = 'fixed bottom-4 right-4 px-6 py-3 rounded-lg shadow-lg transform translate-y-20 opacity-0 transition-all duration-300 flex items-center z-50 ' +
+            (type === 'error' ? 'bg-red-500 text-white' : 'bg-green-500 text-white');
+        // 触发重排后开始动画
+        void successToast.offsetWidth;
+        successToast.classList.remove('translate-y-20', 'opacity-0');
+        clearTimeout(successToast._timer);
+        successToast._timer = setTimeout(() => {
+            successToast.classList.add('translate-y-20', 'opacity-0');
+        }, 2500);
+    }
+
+    /* ===== localStorage ===== */
+    function saveToLocalStorage(md) {
+        try { localStorage.setItem('img2md_result', md); } catch (_) { /* ignore */ }
+    }
+    function restoreFromLocalStorage() {
+        try {
+            const saved = localStorage.getItem('img2md_result');
+            if (saved) {
+                markdownOutput.textContent = saved;
+                resultInitial.classList.add('hidden');
+                resultContent.classList.remove('hidden');
+                resultActions.classList.remove('hidden');
+            }
+        } catch (_) { /* ignore */ }
+    }
+
+    /* ===== 工具 ===== */
+    function formatFileSize(bytes) {
+        if (bytes < 1024) return bytes + ' B';
+        if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+        return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
+    }
+
+    /* ===== 启动 ===== */
+    // 单一入口：等待 DOM 就绪后执行一次
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+    } else {
+        init();
+    }
+    </script>
+</body>
+</html>

@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>功能修复测试页面</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 20px;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+        }
+        .result {
+            margin-top: 10px;
+            padding: 10px;
+            background-color: #f0f0f0;
+            border-radius: 4px;
+            min-height: 50px;
+        }
+        button {
+            padding: 8px 16px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        .log-entry {
+            margin: 5px 0;
+            padding: 5px;
+            border-left: 3px solid #007bff;
+            background-color: #f8f9fa;
+        }
+        .success {
+            border-left-color: #28a745;
+        }
+        .error {
+            border-left-color: #dc3545;
+        }
+        .warning {
+            border-left-color: #ffc107;
+        }
+    </style>
+</head>
+<body>
+    <h1>图片选择功能修复测试</h1>
+    
+    <div class="test-section">
+        <h2>1. 文件选择功能测试</h2>
+        <p>测试文件选择按钮和拖拽区域的点击功能</p>
+        <button onclick="testFileSelection()">开始测试</button>
+        <div id="file-selection-result" class="result"></div>
+    </div>
+    
+    <div class="test-section">
+        <h2>2. 事件监听器测试</h2>
+        <p>验证事件监听器是否正确绑定</p>
+        <button onclick="testEventListeners()">检查事件监听器</button>
+        <div id="event-result" class="result"></div>
+    </div>
+    
+    <div class="test-section">
+        <h2>3. DOM元素检查</h2>
+        <p>检查关键DOM元素是否存在</p>
+        <button onclick="checkDOMElements()">检查DOM元素</button>
+        <div id="dom-result" class="result"></div>
+    </div>
+    
+    <div class="test-section">
+        <h2>4. 集成测试</h2>
+        <p>完整测试图片上传流程</p>
+        <div id="drag-area-test" class="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center cursor-pointer hover:border-blue-500 transition-all duration-300 mb-6 relative">
+            <div class="upload-icon mb-4">
+                <i class="fa fa-cloud-upload text-5xl text-blue-500 opacity-75"></i>
+            </div>
+            <h3 class="text-lg font-medium mb-2">拖拽图片到此处或点击选择文件</h3>
+            <p class="text-sm text-gray-500 mb-4">支持 JPG、PNG、WebP 格式，最大 10MB</p>
+            <input type="file" id="test-file-input" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" accept="image/*" multiple />
+            <button id="test-select-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-6 rounded-lg transition-all duration-300 shadow hover:shadow-md relative z-20">
+                选择图片
+            </button>
+        </div>
+        <div id="test-preview" class="hidden">
+            <h4>图片预览</h4>
+            <img id="test-preview-img" style="max-width: 100%; max-height: 200px;" />
+        </div>
+        <div id="integration-result" class="result"></div>
+    </div>
+    
+    <div class="test-section">
+        <h2>控制台日志</h2>
+        <div id="console-log" style="max-height: 300px; overflow-y: auto;"></div>
+    </div>
+    
+    <script>
+        // 全局日志数组
+        let logs = [];
+        
+        // 模拟控制台日志
+        function log(message, type = 'info') {
+            const logEntry = document.createElement('div');
+            logEntry.className = `log-entry ${type}`;
+            logEntry.innerHTML = `<strong>${new Date().toLocaleTimeString()}</strong>: ${message}`;
+            
+            const consoleLog = document.getElementById('console-log');
+            consoleLog.appendChild(logEntry);
+            consoleLog.scrollTop = consoleLog.scrollHeight;
+            
+            logs.push({ message, type, timestamp: new Date() });
+            
+            // 限制日志数量
+            if (logs.length > 50) {
+                logs.shift();
+                consoleLog.removeChild(consoleLog.firstChild);
+            }
+        }
+        
+        // 1. 测试文件选择功能
+        function testFileSelection() {
+            const resultDiv = document.getElementById('file-selection-result');
+            resultDiv.innerHTML = '测试中...';
+            
+            try {
+                // 创建测试文件输入
+                const testInput = document.createElement('input');
+                testInput.type = 'file';
+                testInput.accept = 'image/*';
+                testInput.style.display = 'none';
+                document.body.appendChild(testInput);
+                
+                // 模拟点击
+                log('模拟点击文件输入框', 'info');
+                testInput.click();
+                
+                // 监听变化
+                testInput.addEventListener('change', function(e) {
+                    if (e.target.files.length > 0) {
+                        log('文件选择成功: ' + e.target.files[0].name, 'success');
+                        resultDiv.innerHTML = `<span style="color: green;">✓ 文件选择功能正常</span><br>选择的文件: ${e.target.files[0].name}`;
+                    } else {
+                        log('文件选择被取消', 'warning');
+                        resultDiv.innerHTML = '<span style="color: orange;">⚠ 文件选择被取消</span>';
+                    }
+                    document.body.removeChild(testInput);
+                });
+                
+                // 超时处理
+                setTimeout(() => {
+                    if (document.body.contains(testInput)) {
+                        log('文件选择超时', 'warning');
+                        resultDiv.innerHTML = '<span style="color: orange;">⚠ 文件选择超时或被阻止</span>';
+                        document.body.removeChild(testInput);
+                    }
+                }, 10000);
+                
+            } catch (error) {
+                log('文件选择测试失败: ' + error.message, 'error');
+                resultDiv.innerHTML = `<span style="color: red;">✗ 测试失败: ${error.message}</span>`;
+            }
+        }
+        
+        // 2. 测试事件监听器
+        function testEventListeners() {
+            const resultDiv = document.getElementById('event-result');
+            resultDiv.innerHTML = '检查中...';
+            
+            try {
+                // 检查主应用的事件监听器
+                if (typeof window.init === 'function') {
+                    log('找到初始化函数', 'success');
+                    
+                    // 创建测试元素
+                    const testBtn = document.createElement('button');
+                    testBtn.id = 'test-event-btn';
+                    testBtn.textContent = '测试按钮';
+                    testBtn.style.display = 'none';
+                    document.body.appendChild(testBtn);
+                    
+                    let eventFired = false;
+                    
+                    // 添加事件监听器
+                    testBtn.addEventListener('click', function() {
+                        eventFired = true;
+                        log('事件监听器工作正常', 'success');
+                    });
+                    
+                    // 触发事件
+                    testBtn.click();
+                    
+                    if (eventFired) {
+                        resultDiv.innerHTML = '<span style="color: green;">✓ 事件监听器工作正常</span>';
+                    } else {
+                        resultDiv.innerHTML = '<span style="color: red;">✗ 事件监听器未触发</span>';
+                    }
+                    
+                    document.body.removeChild(testBtn);
+                    
+                } else {
+                    log('未找到初始化函数', 'error');
+                    resultDiv.innerHTML = '<span style="color: red;">✗ 未找到应用初始化函数</span>';
+                }
+                
+            } catch (error) {
+                log('事件监听器测试失败: ' + error.message, 'error');
+                resultDiv.innerHTML = `<span style="color: red;">✗ 测试失败: ${error.message}</span>`;
+            }
+        }
+        
+        // 3. 检查DOM元素
+        function checkDOMElements() {
+            const resultDiv = document.getElementById('dom-result');
+            resultDiv.innerHTML = '检查中...';
+            
+            try {
+                const requiredElements = [
+                    'drag-area',
+                    'file-input',
+                    'select-btn',
+                    'preview-container',
+                    'preview-img',
+                    'process-btn'
+                ];
+                
+                let allFound = true;
+                let missingElements = [];
+                
+                requiredElements.forEach(id => {
+                    const element = document.getElementById(id);
+                    if (element) {
+                        log(`找到DOM元素: ${id}`, 'success');
+                    } else {
+                        log(`未找到DOM元素: ${id}`, 'error');
+                        allFound = false;
+                        missingElements.push(id);
+                    }
+                });
+                
+                if (allFound) {
+                    resultDiv.innerHTML = '<span style="color: green;">✓ 所有必需的DOM元素都已找到</span>';
+                } else {
+                    resultDiv.innerHTML = `<span style="color: red;">✗ 缺少以下DOM元素: ${missingElements.join(', ')}</span>`;
+                }
+                
+            } catch (error) {
+                log('DOM元素检查失败: ' + error.message, 'error');
+                resultDiv.innerHTML = `<span style="color: red;">✗ 检查失败: ${error.message}</span>`;
+            }
+        }
+        
+        // 4. 集成测试初始化
+        function initIntegrationTest() {
+            const testDragArea = document.getElementById('drag-area-test');
+            const testFileInput = document.getElementById('test-file-input');
+            const testSelectBtn = document.getElementById('test-select-btn');
+            const testPreview = document.getElementById('test-preview');
+            const testPreviewImg = document.getElementById('test-preview-img');
+            const integrationResult = document.getElementById('integration-result');
+            
+            log('初始化集成测试', 'info');
+            
+            // 绑定事件
+            testSelectBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                log('测试选择按钮被点击', 'info');
+                testFileInput.click();
+            });
+            
+            testDragArea.addEventListener('click', function(e) {
+                if (e.target === testDragArea || e.target === testDragArea.querySelector('.upload-icon') || 
+                    e.target === testDragArea.querySelector('h3') || e.target === testDragArea.querySelector('p')) {
+                    e.preventDefault();
+                    log('测试拖拽区域被点击', 'info');
+                    testFileInput.click();
+                }
+            });
+            
+            testFileInput.addEventListener('change', function(e) {
+                if (e.target.files.length > 0) {
+                    const file = e.target.files[0];
+                    log(`集成测试: 选择了文件 ${file.name}`, 'success');
+                    
+                    // 显示预览
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        testPreviewImg.src = e.target.result;
+                        testPreview.classList.remove('hidden');
+                        integrationResult.innerHTML = `<span style="color: green;">✓ 集成测试成功: 成功选择并预览图片</span><br>文件名: ${file.name}<br>文件大小: ${(file.size / 1024).toFixed(1)} KB`;
+                    };
+                    reader.readAsDataURL(file);
+                    
+                } else {
+                    log('集成测试: 文件选择被取消', 'warning');
+                    integrationResult.innerHTML = '<span style="color: orange;">⚠ 文件选择被取消</span>';
+                }
+            });
+            
+            log('集成测试初始化完成', 'success');
+        }
+        
+        // 页面加载完成后初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            log('页面加载完成，开始测试', 'info');
+            initIntegrationTest();
+        });
+    </script>
+</body>
+</html>
