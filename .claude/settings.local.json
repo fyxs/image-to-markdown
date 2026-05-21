@@ -1,4 +1,11 @@
 {
+  "permissions": {
+    "allow": [
+      "Bash(curl -s https://ai-route.tiansu-china.com/v1/chat/completions -H 'Content-Type: application/json' -H 'Authorization: Bearer sk-xQ7F0F0zwq7pfXDRwHptMKkDzkJbYznhXhKqfuKazYKTXWJ2' -d '{ *)",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(d.get\\('choices',[{}]\\)[0].get\\('message',{}\\).get\\('content','NO CONTENT'\\)[:500]\\)\")",
+      "Bash(curl *)"
+    ]
+  },
   "enabledMcpjsonServers": [
     "figma",
     "webmcp",
