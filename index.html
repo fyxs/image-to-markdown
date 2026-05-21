@@ -1,354 +1,666 @@
 <!doctype html>
 <html lang="zh-CN">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>图片转 Markdown</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet" />
-  <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: system-ui, -apple-system, sans-serif; }
-    @keyframes spin { to { transform: rotate(360deg); } }
-    .spinner { width: 20px; height: 20px; border: 2px solid #e5e7eb; border-top-color: #3b82f6; border-radius: 50%; animation: spin 0.6s linear infinite; }
-    ::-webkit-scrollbar { width: 6px; }
-    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
-    .preview-img { min-height: 380px; background-size: contain; background-repeat: no-repeat; background-position: center; }
-    #toast { transition: all 0.3s ease; }
-  </style>
-</head>
-<body class="bg-gray-50 min-h-screen">
-  <div class="max-w-5xl mx-auto px-4 py-6">
-    <!-- 头部 -->
-    <header class="text-center mb-6">
-      <h1 class="text-3xl font-bold text-gray-800">图片转 Markdown</h1>
-      <p class="text-gray-500 text-sm mt-1">上传图片 → AI 识别 → 输出 Markdown</p>
-    </header>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>图片转 Markdown</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link
+      href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css"
+      rel="stylesheet"
+    />
+    <style>
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      body {
+        font-family:
+          system-ui,
+          -apple-system,
+          sans-serif;
+      }
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+      .spinner {
+        width: 20px;
+        height: 20px;
+        border: 2px solid #e5e7eb;
+        border-top-color: #3b82f6;
+        border-radius: 50%;
+        animation: spin 0.6s linear infinite;
+      }
+      ::-webkit-scrollbar {
+        width: 6px;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #cbd5e1;
+        border-radius: 3px;
+      }
+      .preview-img {
+        min-height: 380px;
+        background-size: contain;
+        background-repeat: no-repeat;
+        background-position: center;
+      }
+      #toast {
+        transition: all 0.3s ease;
+      }
+    </style>
+  </head>
+  <body class="bg-gray-50 min-h-screen">
+    <div class="max-w-7xl mx-auto px-4 py-6">
+      <!-- 头部 -->
+      <header class="text-center mb-6">
+        <h1 class="text-3xl font-bold text-gray-800">图片转 Markdown</h1>
+        <p class="text-gray-500 text-sm mt-1">
+          上传图片 → AI 识别 → 输出 Markdown
+        </p>
+      </header>
 
-    <!-- 配置条 -->
-    <div class="bg-white rounded-xl shadow-sm border p-3 mb-4 flex items-center gap-3 flex-wrap text-sm">
-      <span class="text-gray-500 font-medium flex items-center gap-1">
-        <i class="fa fa-cog"></i> API：
-      </span>
-      <input id="api-ep" type="url" value="https://ai-route.tiansu-china.com/v1/chat/completions"
-             class="flex-1 min-w-[200px] border rounded px-2 py-1.5 text-xs outline-none focus:border-blue-400" />
-      <input id="api-key" type="password" placeholder="API Key"
-             class="w-44 border rounded px-2 py-1.5 text-xs outline-none focus:border-blue-400" />
-      <input id="api-model" type="text" value="kimi-k2.5"
-             class="w-32 border rounded px-2 py-1.5 text-xs outline-none focus:border-blue-400" />
-      <span class="text-gray-400 text-xs">Key 仅存本地</span>
-    </div>
-
-    <!-- 主区域 -->
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-      <!-- 左侧：上传 -->
-      <div class="bg-white rounded-xl shadow-sm border p-5">
-        <!-- 拖拽区 -->
-        <div id="drop-zone"
-             class="border-2 border-dashed border-gray-200 rounded-xl p-8 text-center cursor-pointer hover:border-blue-400 transition-colors mb-4">
-          <div class="text-blue-400 text-4xl mb-2"><i class="fa fa-cloud-upload"></i></div>
-          <p class="text-gray-600 font-medium">点击或拖拽上传图片</p>
-          <p class="text-gray-400 text-xs mt-1">JPG / PNG / WebP，最大 10MB</p>
-          <input id="file-input" type="file" accept="image/*" class="hidden" />
-        </div>
-
-        <!-- 预览 -->
-        <div id="preview-area" class="hidden">
-          <h3 class="text-sm font-medium text-gray-600 mb-2 flex items-center gap-1">
-            <i class="fa fa-image text-blue-500"></i> 预览
-            <button id="remove-btn" class="ml-auto text-gray-400 hover:text-red-500 text-xs"><i class="fa fa-trash"></i></button>
-          </h3>
-          <div class="bg-gray-100 rounded-xl p-3 mb-3">
-            <div id="preview-img" class="preview-img w-full rounded-lg cursor-pointer" title="点击放大预览"></div>
-          </div>
-          <div class="text-xs text-gray-500 mb-3 leading-relaxed" id="file-info"></div>
-          <button id="convert-btn"
-                  class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5 rounded-xl transition-colors flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed">
-            <i class="fa fa-magic"></i> 转换为 Markdown
-          </button>
-        </div>
-
-        <!-- 处理中 -->
-        <div id="loading-area" class="hidden text-center py-10">
-          <div class="spinner mx-auto mb-3"></div>
-          <p class="text-gray-600 text-sm" id="load-text">正在处理...</p>
-          <button id="cancel-btn" class="mt-3 text-xs text-red-400 hover:text-red-600"><i class="fa fa-times"></i> 取消</button>
-        </div>
+      <!-- 配置条 -->
+      <div
+        class="bg-white rounded-xl shadow-sm border p-3 mb-4 flex items-center gap-3 flex-wrap text-sm"
+      >
+        <span class="text-gray-500 font-medium flex items-center gap-1">
+          <i class="fa fa-cog"></i> API：
+        </span>
+        <input
+          id="api-ep"
+          type="url"
+          value="https://ai-route.tiansu-china.com/v1/chat/completions"
+          class="flex-1 min-w-[200px] border rounded px-2 py-1.5 text-xs outline-none focus:border-blue-400"
+        />
+        <input
+          id="api-key"
+          type="password"
+          placeholder="API Key"
+          class="w-44 border rounded px-2 py-1.5 text-xs outline-none focus:border-blue-400"
+        />
+        <input
+          id="api-model"
+          type="text"
+          value="kimi-k2.5"
+          class="w-32 border rounded px-2 py-1.5 text-xs outline-none focus:border-blue-400"
+        />
+        <span class="text-gray-400 text-xs"
+          >Key 仅存本地 · 兼容 OpenAI 格式</span
+        >
       </div>
 
-      <!-- 右侧：结果 -->
-      <div class="bg-white rounded-xl shadow-sm border p-5 flex flex-col">
-        <div class="flex items-center justify-between mb-3">
-          <h3 class="text-sm font-medium text-gray-600 flex items-center gap-1">
-            <i class="fa fa-code text-green-500"></i> Markdown 结果
-          </h3>
-          <div id="result-actions" class="hidden flex gap-2">
-            <button id="copy-btn" class="text-xs bg-gray-100 hover:bg-gray-200 px-3 py-1 rounded-lg transition-colors"><i class="fa fa-copy"></i> 复制</button>
-            <button id="dl-btn" class="text-xs bg-gray-100 hover:bg-gray-200 px-3 py-1 rounded-lg transition-colors"><i class="fa fa-download"></i> 下载</button>
+      <!-- 主区域 -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <!-- 左侧：上传 -->
+        <div class="bg-white rounded-xl shadow-sm border p-5 min-h-[450px]">
+          <!-- 拖拽区 -->
+          <div
+            id="drop-zone"
+            class="border-2 border-dashed border-gray-200 rounded-xl text-center cursor-pointer hover:border-blue-400 transition-colors flex flex-col justify-center p-8"
+            style="min-height: 100%"
+          >
+            <div class="text-blue-400 text-4xl mb-2">
+              <i class="fa fa-cloud-upload"></i>
+            </div>
+            <p class="text-gray-600 font-medium">点击或拖拽上传图片</p>
+            <p class="text-gray-400 text-xs mt-1">
+              JPG / PNG / WebP，最大 10MB
+            </p>
+            <input
+              id="file-input"
+              type="file"
+              accept="image/*"
+              class="hidden"
+            />
+          </div>
+
+          <!-- 预览 -->
+          <div id="preview-area" class="hidden">
+            <h3
+              class="text-sm font-medium text-gray-600 mb-2 flex items-center gap-1"
+            >
+              <i class="fa fa-image text-blue-500"></i> 预览
+              <button
+                id="remove-btn"
+                class="ml-auto text-gray-400 hover:text-red-500 text-xs"
+              >
+                <i class="fa fa-trash"></i>
+              </button>
+            </h3>
+            <div class="bg-gray-100 rounded-xl p-3 mb-3">
+              <div
+                id="preview-img"
+                class="preview-img w-full rounded-lg cursor-pointer"
+                title="点击放大预览"
+              ></div>
+            </div>
+            <div
+              class="text-xs text-gray-500 mb-3 leading-relaxed"
+              id="file-info"
+            ></div>
+            <button
+              id="convert-btn"
+              class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5 rounded-xl transition-colors flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <i class="fa fa-magic"></i> 转换为 Markdown
+            </button>
+          </div>
+
+          <!-- 处理中 -->
+          <div
+            id="loading-area"
+            style="height: 100%; justify-content: center"
+            class="hidden flex flex-col items-center text-center py-10"
+          >
+            <div class="spinner mx-auto mb-3"></div>
+            <p class="text-gray-600 text-sm" id="load-text">正在处理...</p>
+            <button
+              id="cancel-btn"
+              class="mt-3 text-xs text-red-400 hover:text-red-600"
+            >
+              <i class="fa fa-times"></i> 取消
+            </button>
           </div>
         </div>
-        <div id="result-empty" class="flex-1 flex items-center justify-center text-gray-300 text-sm">
-          <div class="text-center"><i class="fa fa-file-text-o text-5xl mb-2 block"></i>上传图片后转换</div>
-        </div>
-        <pre id="result-content" class="hidden flex-1 text-sm text-gray-800 whitespace-pre-wrap break-words overflow-y-auto max-h-[60vh] font-mono bg-gray-50 rounded-xl p-4 border"></pre>
-        <div id="error-box" class="hidden mt-3 p-3 bg-red-50 text-red-600 rounded-xl text-sm">
-          <p id="error-msg"></p>
-          <button id="retry-btn" class="mt-2 text-xs underline">重试</button>
+
+        <!-- 右侧：结果 -->
+        <div
+          class="bg-white rounded-xl shadow-sm border p-5 flex flex-col min-h-[450px]"
+        >
+          <div class="flex items-center justify-between mb-3">
+            <h3
+              class="text-sm font-medium text-gray-600 flex items-center gap-1"
+            >
+              <i class="fa fa-code text-green-500"></i> Markdown 结果
+            </h3>
+            <div id="result-actions" class="hidden flex gap-2">
+              <button
+                id="copy-btn"
+                class="text-xs bg-gray-100 hover:bg-gray-200 px-3 py-1 rounded-lg transition-colors"
+              >
+                <i class="fa fa-copy"></i> 复制
+              </button>
+              <button
+                id="dl-btn"
+                class="text-xs bg-gray-100 hover:bg-gray-200 px-3 py-1 rounded-lg transition-colors"
+              >
+                <i class="fa fa-download"></i> 下载
+              </button>
+            </div>
+          </div>
+          <div
+            id="result-empty"
+            class="flex-1 flex items-center justify-center text-gray-300 text-sm"
+          >
+            <div class="text-center">
+              <i class="fa fa-file-text-o text-5xl mb-2 block"></i
+              >上传图片后转换
+            </div>
+          </div>
+          <pre
+            id="result-content"
+            class="hidden flex-1 text-sm text-gray-800 whitespace-pre-wrap break-words overflow-y-auto max-h-[75vh] font-mono bg-gray-50 rounded-xl p-4 border"
+          ></pre>
+          <div
+            id="error-box"
+            class="hidden mt-3 p-3 bg-red-50 text-red-600 rounded-xl text-sm"
+          >
+            <p id="error-msg"></p>
+            <button id="retry-btn" class="mt-2 text-xs underline">重试</button>
+          </div>
         </div>
       </div>
+      <p class="text-center text-xs text-gray-400 mt-6">
+        Key 仅存储在浏览器本地，不会上传到其他服务
+      </p>
     </div>
-    <p class="text-center text-xs text-gray-400 mt-6">Key 仅存储在浏览器本地，不会上传到其他服务</p>
-  </div>
 
-  <!-- 放大预览 -->
-  <div id="lightbox" class="fixed inset-0 bg-black/70 z-50 hidden items-center justify-center" style="display:none">
-    <div class="relative max-w-[90vw] max-h-[90vh] flex items-center justify-center">
-      <button id="lb-close" class="absolute -top-10 right-0 text-white text-2xl hover:text-gray-300 z-10"><i class="fa fa-times"></i></button>
-      <span id="lb-zoom" class="absolute -top-10 left-0 text-white/60 text-sm font-mono z-10">100%</span>
-      <div id="lb-img" class="bg-contain bg-no-repeat bg-center" style="min-width:80vw;min-height:85vh;cursor:zoom-in"></div>
+    <!-- 放大预览 -->
+    <div
+      id="lightbox"
+      class="fixed inset-0 bg-black/70 z-50 hidden items-center justify-center"
+      style="display: none"
+    >
+      <div
+        class="relative max-w-[90vw] max-h-[90vh] flex items-center justify-center"
+      >
+        <button
+          id="lb-close"
+          class="absolute -top-10 right-0 text-white text-2xl hover:text-gray-300 z-10"
+        >
+          <i class="fa fa-times"></i>
+        </button>
+        <span
+          id="lb-zoom"
+          class="absolute -top-10 left-0 text-white/60 text-sm font-mono z-10"
+          >100%</span
+        >
+        <div
+          id="lb-img"
+          class="bg-contain bg-no-repeat bg-center"
+          style="min-width: 80vw; min-height: 85vh; cursor: zoom-in"
+        ></div>
+      </div>
     </div>
-  </div>
 
-  <!-- Toast -->
-  <div id="toast" class="fixed bottom-6 right-6 bg-gray-800 text-white px-4 py-2 rounded-lg text-sm shadow-lg translate-y-4 opacity-0 pointer-events-none">消息</div>
+    <!-- Toast -->
+    <div
+      id="toast"
+      class="fixed bottom-6 right-6 bg-gray-800 text-white px-4 py-2 rounded-lg text-sm shadow-lg translate-y-4 opacity-0 pointer-events-none"
+    >
+      消息
+    </div>
 
-<script>
-/* ===== 状态 ===== */
-let currentFile = null;
-let currentDataUrl = null;
-let savedFileName = ''; // 持久化原始文件名，供下载用
-let abortCtrl = null;
-let processing = false;
+    <script>
+      /* ===== 状态 ===== */
+      let currentFile = null;
+      let currentDataUrl = null;
+      let savedFileName = ""; // 持久化原始文件名，供下载用
+      let abortCtrl = null;
+      let processing = false;
 
-/* ===== DOM ===== */
-const $ = s => document.querySelector(s);
-const $$ = s => document.querySelectorAll(s);
-const dropZone = $('#drop-zone');
-const fileInput = $('#file-input');
-const previewArea = $('#preview-area');
-const previewImg = $('#preview-img');
-const fileInfo = $('#file-info');
-const removeBtn = $('#remove-btn');
-const convertBtn = $('#convert-btn');
-const loadingArea = $('#loading-area');
-const loadText = $('#load-text');
-const cancelBtn = $('#cancel-btn');
-const resultEmpty = $('#result-empty');
-const resultContent = $('#result-content');
-const resultActions = $('#result-actions');
-const copyBtn = $('#copy-btn');
-const dlBtn = $('#dl-btn');
-const errorBox = $('#error-box');
-const errorMsg = $('#error-msg');
-const retryBtn = $('#retry-btn');
-const toast = $('#toast');
-const apiEp = $('#api-ep');
-const apiKey = $('#api-key');
-const apiModel = $('#api-model');
+      /* ===== DOM ===== */
+      const $ = (s) => document.querySelector(s);
+      const $$ = (s) => document.querySelectorAll(s);
+      const dropZone = $("#drop-zone");
+      const fileInput = $("#file-input");
+      const previewArea = $("#preview-area");
+      const previewImg = $("#preview-img");
+      const fileInfo = $("#file-info");
+      const removeBtn = $("#remove-btn");
+      const convertBtn = $("#convert-btn");
+      const loadingArea = $("#loading-area");
+      const loadText = $("#load-text");
+      const cancelBtn = $("#cancel-btn");
+      const resultEmpty = $("#result-empty");
+      const resultContent = $("#result-content");
+      const resultActions = $("#result-actions");
+      const copyBtn = $("#copy-btn");
+      const dlBtn = $("#dl-btn");
+      const errorBox = $("#error-box");
+      const errorMsg = $("#error-msg");
+      const retryBtn = $("#retry-btn");
+      const toast = $("#toast");
+      const apiEp = $("#api-ep");
+      const apiKey = $("#api-key");
+      const apiModel = $("#api-model");
 
-/* ===== 配置持久化 ===== */
-function loadConfig() {
-  try {
-    const d = JSON.parse(localStorage.getItem('img2md_cfg'));
-    if (d) { if (d.ep) apiEp.value = d.ep; if (d.key) apiKey.value = d.key; if (d.model) apiModel.value = d.model; }
-  } catch (_) {}
-}
-function saveConfig() {
-  try { localStorage.setItem('img2md_cfg', JSON.stringify({ ep: apiEp.value, key: apiKey.value, model: apiModel.value })); } catch (_) {}
-}
-[apiEp, apiKey, apiModel].forEach(el => el.addEventListener('change', saveConfig));
+      /* ===== 配置持久化 ===== */
+      function loadConfig() {
+        try {
+          const d = JSON.parse(localStorage.getItem("img2md_cfg"));
+          if (d) {
+            if (d.ep) apiEp.value = d.ep;
+            if (d.key) apiKey.value = d.key;
+            if (d.model) apiModel.value = d.model;
+          }
+        } catch (_) {}
+      }
+      function saveConfig() {
+        try {
+          localStorage.setItem(
+            "img2md_cfg",
+            JSON.stringify({
+              ep: apiEp.value,
+              key: apiKey.value,
+              model: apiModel.value,
+            }),
+          );
+        } catch (_) {}
+      }
+      [apiEp, apiKey, apiModel].forEach((el) =>
+        el.addEventListener("change", saveConfig),
+      );
 
-/* ===== Toast ===== */
-let toastTimer;
-function showToast(msg, err) {
-  toast.textContent = msg;
-  toast.className = 'fixed bottom-6 right-6 px-4 py-2 rounded-lg text-sm shadow-lg transition-all duration-300 ' + (err ? 'bg-red-600 text-white' : 'bg-gray-800 text-white');
-  toast.classList.remove('translate-y-4', 'opacity-0', 'pointer-events-none');
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => toast.classList.add('translate-y-4', 'opacity-0', 'pointer-events-none'), 2500);
-}
+      /* ===== Toast ===== */
+      let toastTimer;
+      function showToast(msg, err) {
+        toast.textContent = msg;
+        toast.className =
+          "fixed bottom-6 right-6 px-4 py-2 rounded-lg text-sm shadow-lg transition-all duration-300 " +
+          (err ? "bg-red-600 text-white" : "bg-gray-800 text-white");
+        toast.classList.remove(
+          "translate-y-4",
+          "opacity-0",
+          "pointer-events-none",
+        );
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(
+          () =>
+            toast.classList.add(
+              "translate-y-4",
+              "opacity-0",
+              "pointer-events-none",
+            ),
+          2500,
+        );
+      }
 
-/* ===== 文件处理 ===== */
-dropZone.addEventListener('click', e => {
-  if (e.target === dropZone || e.target.closest('#drop-zone') === dropZone) fileInput.click();
-});
-dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('border-blue-400', 'bg-blue-50'); });
-dropZone.addEventListener('dragleave', () => dropZone.classList.remove('border-blue-400', 'bg-blue-50'));
-dropZone.addEventListener('drop', e => { e.preventDefault(); dropZone.classList.remove('border-blue-400', 'bg-blue-50'); handleFile(e.dataTransfer.files[0]); });
-fileInput.addEventListener('change', e => { if (e.target.files[0]) handleFile(e.target.files[0]); });
+      /* ===== 文件处理 ===== */
+      dropZone.addEventListener("click", (e) => {
+        if (
+          e.target === dropZone ||
+          e.target.closest("#drop-zone") === dropZone
+        )
+          fileInput.click();
+      });
+      dropZone.addEventListener("dragover", (e) => {
+        e.preventDefault();
+        dropZone.classList.add("border-blue-400", "bg-blue-50");
+      });
+      dropZone.addEventListener("dragleave", () =>
+        dropZone.classList.remove("border-blue-400", "bg-blue-50"),
+      );
+      dropZone.addEventListener("drop", (e) => {
+        e.preventDefault();
+        dropZone.classList.remove("border-blue-400", "bg-blue-50");
+        handleFile(e.dataTransfer.files[0]);
+      });
+      fileInput.addEventListener("change", (e) => {
+        if (e.target.files[0]) handleFile(e.target.files[0]);
+      });
 
-function handleFile(file) {
-  if (!file || !file.type.startsWith('image/')) return showToast('请上传图片文件', true);
-  if (file.size > 10 * 1024 * 1024) return showToast('图片不能超过 10MB', true);
-  currentFile = file; savedFileName = file.name;
-  // 用 FileReader 读为 DataURL（兼容性最好，避开 MarsCode 对 img src 的拦截）
-  const r = new FileReader();
-  r.onload = () => {
-    currentDataUrl = r.result;
-    previewImg.style.backgroundImage = 'url("' + currentDataUrl + '")';
-    const size = file.size < 1024 * 1024 ? (file.size / 1024).toFixed(0) + ' KB' : (file.size / (1024 * 1024)).toFixed(2) + ' MB';
-    fileInfo.textContent = file.name + ' · ' + size;
-    previewArea.classList.remove('hidden');
-    dropZone.classList.add('hidden');
-    convertBtn.disabled = false;
-    resetResult();
-    showToast('图片已加载');
-  };
-  r.onerror = () => showToast('读取文件失败', true);
-  r.readAsDataURL(file);
-}
+      function handleFile(file) {
+        if (!file || !file.type.startsWith("image/"))
+          return showToast("请上传图片文件", true);
+        if (file.size > 10 * 1024 * 1024)
+          return showToast("图片不能超过 10MB", true);
+        currentFile = file;
+        savedFileName = file.name;
+        // 用 FileReader 读为 DataURL（兼容性最好，避开 MarsCode 对 img src 的拦截）
+        const r = new FileReader();
+        r.onload = () => {
+          currentDataUrl = r.result;
+          previewImg.style.backgroundImage = 'url("' + currentDataUrl + '")';
+          const size =
+            file.size < 1024 * 1024
+              ? (file.size / 1024).toFixed(0) + " KB"
+              : (file.size / (1024 * 1024)).toFixed(2) + " MB";
+          fileInfo.textContent = file.name + " · " + size;
+          previewArea.classList.remove("hidden");
+          dropZone.classList.add("hidden");
+          convertBtn.disabled = false;
+          resetResult();
+          showToast("图片已加载");
+        };
+        r.onerror = () => showToast("读取文件失败", true);
+        r.readAsDataURL(file);
+      }
 
-removeBtn.addEventListener('click', resetAll);
-cancelBtn.addEventListener('click', () => { if (abortCtrl) abortCtrl.abort(); });
+      removeBtn.addEventListener("click", resetAll);
+      cancelBtn.addEventListener("click", () => {
+        if (abortCtrl) abortCtrl.abort();
+      });
 
-/* 放大预览 + 滚轮缩放 + 拖拽移动 */
-const lightbox = $('#lightbox'), lbImg = $('#lb-img'), lbClose = $('#lb-close'), lbZoom = $('#lb-zoom');
-let lbScale = 1, lbPanX = 0, lbPanY = 0, lbDrag = false, lbStartX = 0, lbStartY = 0;
-previewImg.addEventListener('click', () => {
-  const bg = previewImg.style.backgroundImage;
-  if (bg && bg !== 'none') {
-    lbScale = 1; lbPanX = 0; lbPanY = 0;
-    lbImg.style.backgroundImage = bg;
-    lbImg.style.backgroundSize = 'contain';
-    lbImg.style.backgroundPosition = 'center';
-    lbZoom.textContent = '100%';
-    lightbox.style.display = 'flex';
-  }
-});
-const updateLbPos = () => {
-  lbImg.style.backgroundPosition = `calc(50% + ${lbPanX}px) calc(50% + ${lbPanY}px)`;
-};
-const closeLb = () => { lightbox.style.display = 'none'; lbImg.style.backgroundImage = 'none'; lbImg.style.backgroundSize = 'contain'; lbImg.style.backgroundPosition = 'center'; lbScale = 1; lbPanX = 0; lbPanY = 0; };
-lightbox.addEventListener('click', e => { if (e.target === lightbox) closeLb(); });
-lbClose.addEventListener('click', e => { e.stopPropagation(); closeLb(); });
-lbImg.addEventListener('wheel', e => {
-  e.preventDefault();
-  const old = lbScale;
-  lbScale = Math.max(0.2, Math.min(5, lbScale + (e.deltaY < 0 ? 0.2 : -0.2)));
-  lbImg.style.backgroundSize = (lbScale * 100) + '%';
-  lbZoom.textContent = Math.round(lbScale * 100) + '%';
-  lbImg.style.cursor = lbScale > 1 ? 'grab' : 'zoom-in';
-  if (lbScale <= 1) { lbPanX = 0; lbPanY = 0; updateLbPos(); }
-}, { passive: false });
-lbImg.addEventListener('mousedown', e => { if (lbScale > 1) { lbDrag = true; lbStartX = e.clientX - lbPanX; lbStartY = e.clientY - lbPanY; lbImg.style.cursor = 'grabbing'; } });
-document.addEventListener('mousemove', e => { if (lbDrag) { lbPanX = e.clientX - lbStartX; lbPanY = e.clientY - lbStartY; updateLbPos(); } });
-document.addEventListener('mouseup', () => { if (lbDrag) { lbDrag = false; lbImg.style.cursor = lbScale > 1 ? 'grab' : 'zoom-in'; } });
-lbImg.addEventListener('touchstart', e => { if (lbScale > 1 && e.touches.length === 1) { lbDrag = true; lbStartX = e.touches[0].clientX - lbPanX; lbStartY = e.touches[0].clientY - lbPanY; } }, { passive: true });
-document.addEventListener('touchmove', e => { if (lbDrag && e.touches.length === 1) { lbPanX = e.touches[0].clientX - lbStartX; lbPanY = e.touches[0].clientY - lbStartY; updateLbPos(); } }, { passive: true });
-document.addEventListener('touchend', () => { lbDrag = false; });
+      /* 放大预览 + 滚轮缩放 + 拖拽移动 */
+      const lightbox = $("#lightbox"),
+        lbImg = $("#lb-img"),
+        lbClose = $("#lb-close"),
+        lbZoom = $("#lb-zoom");
+      let lbScale = 1,
+        lbPanX = 0,
+        lbPanY = 0,
+        lbDrag = false,
+        lbStartX = 0,
+        lbStartY = 0;
+      previewImg.addEventListener("click", () => {
+        const bg = previewImg.style.backgroundImage;
+        if (bg && bg !== "none") {
+          lbScale = 1;
+          lbPanX = 0;
+          lbPanY = 0;
+          lbImg.style.backgroundImage = bg;
+          lbImg.style.backgroundSize = "contain";
+          lbImg.style.backgroundPosition = "center";
+          lbZoom.textContent = "100%";
+          lightbox.style.display = "flex";
+        }
+      });
+      const updateLbPos = () => {
+        lbImg.style.backgroundPosition = `calc(50% + ${lbPanX}px) calc(50% + ${lbPanY}px)`;
+      };
+      const closeLb = () => {
+        lightbox.style.display = "none";
+        lbImg.style.backgroundImage = "none";
+        lbImg.style.backgroundSize = "contain";
+        lbImg.style.backgroundPosition = "center";
+        lbScale = 1;
+        lbPanX = 0;
+        lbPanY = 0;
+      };
+      lightbox.addEventListener("click", (e) => {
+        if (e.target === lightbox) closeLb();
+      });
+      lbClose.addEventListener("click", (e) => {
+        e.stopPropagation();
+        closeLb();
+      });
+      lbImg.addEventListener(
+        "wheel",
+        (e) => {
+          e.preventDefault();
+          const old = lbScale;
+          lbScale = Math.max(
+            0.2,
+            Math.min(5, lbScale + (e.deltaY < 0 ? 0.2 : -0.2)),
+          );
+          lbImg.style.backgroundSize = lbScale * 100 + "%";
+          lbZoom.textContent = Math.round(lbScale * 100) + "%";
+          lbImg.style.cursor = lbScale > 1 ? "grab" : "zoom-in";
+          if (lbScale <= 1) {
+            lbPanX = 0;
+            lbPanY = 0;
+            updateLbPos();
+          }
+        },
+        { passive: false },
+      );
+      lbImg.addEventListener("mousedown", (e) => {
+        if (lbScale > 1) {
+          lbDrag = true;
+          lbStartX = e.clientX - lbPanX;
+          lbStartY = e.clientY - lbPanY;
+          lbImg.style.cursor = "grabbing";
+        }
+      });
+      document.addEventListener("mousemove", (e) => {
+        if (lbDrag) {
+          lbPanX = e.clientX - lbStartX;
+          lbPanY = e.clientY - lbStartY;
+          updateLbPos();
+        }
+      });
+      document.addEventListener("mouseup", () => {
+        if (lbDrag) {
+          lbDrag = false;
+          lbImg.style.cursor = lbScale > 1 ? "grab" : "zoom-in";
+        }
+      });
+      lbImg.addEventListener(
+        "touchstart",
+        (e) => {
+          if (lbScale > 1 && e.touches.length === 1) {
+            lbDrag = true;
+            lbStartX = e.touches[0].clientX - lbPanX;
+            lbStartY = e.touches[0].clientY - lbPanY;
+          }
+        },
+        { passive: true },
+      );
+      document.addEventListener(
+        "touchmove",
+        (e) => {
+          if (lbDrag && e.touches.length === 1) {
+            lbPanX = e.touches[0].clientX - lbStartX;
+            lbPanY = e.touches[0].clientY - lbStartY;
+            updateLbPos();
+          }
+        },
+        { passive: true },
+      );
+      document.addEventListener("touchend", () => {
+        lbDrag = false;
+      });
 
-function resetAll() {
-  if (abortCtrl) abortCtrl.abort();
-  currentFile = null; currentDataUrl = null; processing = false; savedFileName = '';
-  previewImg.style.backgroundImage = 'none';
-  previewArea.classList.add('hidden');
-  dropZone.classList.remove('hidden');
-  loadingArea.classList.add('hidden');
-  convertBtn.disabled = true;
-  resetResult();
-  fileInput.value = '';
-}
+      function resetAll() {
+        if (abortCtrl) abortCtrl.abort();
+        currentFile = null;
+        currentDataUrl = null;
+        processing = false;
+        savedFileName = "";
+        previewImg.style.backgroundImage = "none";
+        previewArea.classList.add("hidden");
+        dropZone.classList.remove("hidden");
+        loadingArea.classList.add("hidden");
+        convertBtn.disabled = true;
+        resetResult();
+        fileInput.value = "";
+      }
 
-function resetResult() {
-  resultEmpty.classList.remove('hidden');
-  resultContent.classList.add('hidden');
-  resultActions.classList.add('hidden');
-  errorBox.classList.add('hidden');
-  resultContent.textContent = '';
-}
+      function resetResult() {
+        resultEmpty.classList.remove("hidden");
+        resultContent.classList.add("hidden");
+        resultActions.classList.add("hidden");
+        errorBox.classList.add("hidden");
+        resultContent.textContent = "";
+      }
 
-/* ===== 转换 ===== */
-convertBtn.addEventListener('click', startConvert);
-retryBtn.addEventListener('click', startConvert);
+      /* ===== 转换 ===== */
+      convertBtn.addEventListener("click", startConvert);
+      retryBtn.addEventListener("click", startConvert);
 
-async function startConvert() {
-  if (processing) return;
-  if (!currentDataUrl) return showToast('请先上传图片', true);
-  const endpoint = apiEp.value.trim();
-  const key = apiKey.value.trim();
-  const model = apiModel.value.trim() || 'gpt-4o-mini';
-  if (!endpoint || !key) return showToast('请配置 API 地址和 Key', true);
+      async function startConvert() {
+        if (processing) return;
+        if (!currentDataUrl) return showToast("请先上传图片", true);
+        const endpoint = apiEp.value.trim();
+        const key = apiKey.value.trim();
+        const model = apiModel.value.trim() || "gpt-4o-mini";
+        if (!endpoint || !key) return showToast("请配置 API 地址和 Key", true);
 
-  processing = true;
-  convertBtn.disabled = true;
-  previewArea.classList.add('hidden');
-  loadingArea.classList.remove('hidden');
-  loadText.textContent = '正在请求 AI 识别...';
-  resetResult();
+        processing = true;
+        convertBtn.disabled = true;
+        previewArea.classList.add("hidden");
+        loadingArea.classList.remove("hidden");
+        loadText.textContent = "正在请求 AI 识别...";
+        resetResult();
 
-  abortCtrl = new AbortController();
-  const signal = abortCtrl.signal;
+        abortCtrl = new AbortController();
+        const signal = abortCtrl.signal;
 
-  try {
-    const resp = await fetch(endpoint, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + key },
-      body: JSON.stringify({
-        model,
-        messages: [{
-          role: 'user',
-          content: [
-            { type: 'text', text: '提取这张图片中的所有文字，转换为 Markdown 格式。保留原始结构（表格、列表、代码块、标题等）。只输出 Markdown，不要额外说明。' },
-            { type: 'image_url', image_url: { url: currentDataUrl, detail: 'high' } }
-          ]
-        }],
-        max_tokens: 4096
-      }),
-      signal
-    });
-    if (!resp.ok) {
-      const t = await resp.text().catch(() => '');
-      throw new Error('API ' + resp.status + (t ? ': ' + t.slice(0, 200) : ''));
-    }
-    const json = await resp.json();
-    const text = json.choices?.[0]?.message?.content || '';
-    if (!text) throw new Error('AI 未返回内容');
+        try {
+          const resp = await fetch(endpoint, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: "Bearer " + key,
+            },
+            body: JSON.stringify({
+              model,
+              messages: [
+                {
+                  role: "user",
+                  content: [
+                    {
+                      type: "text",
+                      text: "提取这张图片中的所有文字，转换为 Markdown 格式。保留原始结构（表格、列表、代码块、标题等）。只输出 Markdown，不要额外说明。",
+                    },
+                    {
+                      type: "image_url",
+                      image_url: { url: currentDataUrl, detail: "high" },
+                    },
+                  ],
+                },
+              ],
+              max_tokens: 4096,
+            }),
+            signal,
+          });
+          if (!resp.ok) {
+            const t = await resp.text().catch(() => "");
+            throw new Error(
+              "API " + resp.status + (t ? ": " + t.slice(0, 200) : ""),
+            );
+          }
+          const json = await resp.json();
+          const text = json.choices?.[0]?.message?.content || "";
+          if (!text) throw new Error("AI 未返回内容");
 
-    loadingArea.classList.add('hidden');
-    previewArea.classList.remove('hidden');
-    convertBtn.disabled = false;
-    processing = false;
+          loadingArea.classList.add("hidden");
+          previewArea.classList.remove("hidden");
+          convertBtn.disabled = false;
+          processing = false;
 
-    resultContent.textContent = text;
-    resultEmpty.classList.add('hidden');
-    resultContent.classList.remove('hidden');
-    resultActions.classList.remove('hidden');
-    showToast('转换完成');
-  } catch (err) {
-    if (err.name === 'AbortError') { resetAll(); showToast('已取消'); return; }
-    loadingArea.classList.add('hidden');
-    previewArea.classList.remove('hidden');
-    convertBtn.disabled = false;
-    processing = false;
-    errorMsg.textContent = err.message;
-    errorBox.classList.remove('hidden');
-    showToast('转换失败', true);
-  }
-}
+          resultContent.textContent = text;
+          resultEmpty.classList.add("hidden");
+          resultContent.classList.remove("hidden");
+          resultActions.classList.remove("hidden");
+          showToast("转换完成");
+        } catch (err) {
+          if (err.name === "AbortError") {
+            resetAll();
+            showToast("已取消");
+            return;
+          }
+          loadingArea.classList.add("hidden");
+          previewArea.classList.remove("hidden");
+          convertBtn.disabled = false;
+          processing = false;
+          errorMsg.textContent = err.message;
+          errorBox.classList.remove("hidden");
+          showToast("转换失败", true);
+        }
+      }
 
-/* ===== 复制 / 下载 ===== */
-copyBtn.addEventListener('click', async () => {
-  const t = resultContent.textContent;
-  if (!t) return;
-  try { await navigator.clipboard.writeText(t); showToast('已复制'); } catch (_) { fallbackCopy(t); }
-});
-function fallbackCopy(t) {
-  const el = document.createElement('textarea'); el.value = t; el.style.cssText = 'position:fixed;top:0;left:0;opacity:0';
-  document.body.appendChild(el); el.select();
-  try { document.execCommand('copy') ? showToast('已复制') : showToast('复制失败', true); } catch (_) { showToast('复制失败', true); }
-  document.body.removeChild(el);
-}
-dlBtn.addEventListener('click', () => {
-  const t = resultContent.textContent; if (!t) return;
-  const blob = new Blob([t], { type: 'text/markdown' });
-  const name = (savedFileName ? savedFileName.replace(/\.[^.]+$/, '') : 'output') + '.md';
-  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name;
-  document.body.appendChild(a); a.click(); setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(blob); }, 200);
-  showToast('已下载');
-});
+      /* ===== 复制 / 下载 ===== */
+      copyBtn.addEventListener("click", async () => {
+        const t = resultContent.textContent;
+        if (!t) return;
+        try {
+          await navigator.clipboard.writeText(t);
+          showToast("已复制");
+        } catch (_) {
+          fallbackCopy(t);
+        }
+      });
+      function fallbackCopy(t) {
+        const el = document.createElement("textarea");
+        el.value = t;
+        el.style.cssText = "position:fixed;top:0;left:0;opacity:0";
+        document.body.appendChild(el);
+        el.select();
+        try {
+          document.execCommand("copy")
+            ? showToast("已复制")
+            : showToast("复制失败", true);
+        } catch (_) {
+          showToast("复制失败", true);
+        }
+        document.body.removeChild(el);
+      }
+      dlBtn.addEventListener("click", () => {
+        const t = resultContent.textContent;
+        if (!t) return;
+        const blob = new Blob([t], { type: "text/markdown" });
+        const name =
+          (savedFileName ? savedFileName.replace(/\.[^.]+$/, "") : "output") +
+          ".md";
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = name;
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(() => {
+          document.body.removeChild(a);
+          URL.revokeObjectURL(blob);
+        }, 200);
+        showToast("已下载");
+      });
 
-/* ===== 初始化 ===== */
-loadConfig();
-</script>
-</body>
+      /* ===== 初始化 ===== */
+      loadConfig();
+    </script>
+  </body>
 </html>
